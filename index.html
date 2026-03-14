@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mumbai Rickshaw Runner</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 400px;
+            height: 700px;
+            background: #2d2d2d;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 0 30px rgba(255, 200, 100, 0.3);
+        }
+        
+        #gameCanvas {
+            display: block;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+        
+        .stat {
+            background: rgba(0,0,0,0.6);
+            padding: 8px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        #abilities {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        
+        .ability {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 25px;
+            font-size: 12px;
+            border: 2px solid #444;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+        
+        .ability.unlocked {
+            opacity: 1;
+            border-color: #ffd700;
+            cursor: pointer;
+        }
+        
+        .ability.active {
+            background: #ffd700;
+            color: #000;
+        }
+        
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 100;
+        }
+        
+        #gameOverScreen {
+            display: none;
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+            color: #ffd700;
+            text-align: center;
+        }
+        
+        h2 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #ff6b6b;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 30px;
+        }
+        
+        .instructions {
+            text-align: center;
+            font-size: 13px;
+            color: #ccc;
+            line-height: 1.8;
+            margin-bottom: 30px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #ffd700, #ff8c00);
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 30px;
+            cursor: pointer;
+            color: #000;
+            font-weight: bold;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: scale(1.05);
+        }
+        
+        .final-stats {
+            margin: 20px 0;
+            text-align: center;
+            line-height: 2;
+        }
+        
+        .controls-hint {
+            position: absolute;
+            bottom: 80px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #666;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="700"></canvas>
+        
+        <div id="ui">
+            <div class="stat">🛺 <span id="distance">0</span>m</div>
+            <div class="stat">☕ <span id="chai">0</span></div>
+            <div class="stat">🪙 <span id="coins">0</span></div>
+        </div>
+        
+        <div id="abilities">
+            <div class="ability" id="hornAbility" data-key="1">1: Horn 📯</div>
+            <div class="ability" id="boostAbility" data-key="2">2: Boost 🚀</div>
+            <div class="ability" id="shieldAbility" data-key="3">3: Shield 🛡️</div>
+        </div>
+        
+        <div id="startScreen">
+            <h1>🛺 Mumbai Rickshaw Runner</h1>
+            <p class="subtitle">Survive the chaos of Mumbai traffic</p>
+            <div class="instructions">
+                <strong>Arrow Keys / WASD</strong> - Move rickshaw<br>
+                <strong>Touch/Drag</strong> - Mobile controls<br><br>
+                Collect ☕ chai for health<br>
+                Collect 🪙 coins for points<br>
+                Unlock abilities as you survive longer!
+            </div>
+            <button id="startBtn">Start Driving!</button>
+        </div>
+        
+        <div id="gameOverScreen">
+            <h2>💥 Crash!</h2>
+            <div class="final-stats">
+                <div>Distance: <span id="finalDistance">0</span>m</div>
+                <div>Coins: <span id="finalCoins">0</span></div>
+                <div>Chai: <span id="finalChai">0</span></div>
+            </div>
+            <button id="restartBtn">Try Again</button>
+        </div>
+        
+        <div class="controls-hint">Use arrow keys or touch to steer</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Game state
+        let game = {
+            running: false,
+            speed: 3,
+            baseSpeed: 3,
+            maxSpeed: 12,
+            distance: 0,
+            coins: 0,
+            chai: 0,
+            health: 100,
+            difficultyMultiplier: 1,
+            weather: 'clear',
+            weatherTimer: 0,
+            timeOfDay: 'day',
+            dayTimer: 0
+        };
+        
+        // Player rickshaw
+        let player = {
+            x: 200,
+            y: 550,
+            width: 45,
+            height: 70,
+            targetX: 200,
+            speed: 5,
+            lane: 1,
+            invincible: false,
+            invincibleTimer: 0,
+            boosting: false,
+            boostTimer: 0,
+            hornActive: false,
+            hornTimer: 0,
+            shieldActive: false,
+            shieldTimer: 0
+        };
+        
+        // Abilities
+        let abilities = {
+            horn: { unlocked: false, unlockDistance: 100, cooldown: 0, maxCooldown: 300 },
+            boost: { unlocked: false, unlockDistance: 300, cooldown: 0, maxCooldown: 500 },
+            shield: { unlocked: false, unlockDistance: 600, cooldown: 0, maxCooldown: 800 }
+        };
+        
+        // Road segments
+        let roadSegments = [];
+        let roadOffset = 0;
+        
+        // Entities
+        let obstacles = [];
+        let collectibles = [];
+        let particles = [];
+        let raindrops = [];
+        
+        // Input
+        let keys = {};
+        let touchX = null;
+        
+        // Obstacle types with properties
+        const obstacleTypes = {
+            car: { width: 40, height: 65, color: '#e74c3c', speed: 0.3, points: 0, avoidable: true },
+            taxi: { width: 40, height: 65, color: '#f1c40f', speed: 0.5, points: 0, avoidable: true },
+            bus: { width: 55, height: 100, color: '#27ae60', speed: 0.2, points: 0, avoidable: true },
+            dog: { width: 25, height: 20, color: '#8b4513', speed: 0.8, points: 0, avoidable: true, erratic: true },
+            vendor: { width: 35, height: 35, color: '#9b59b6', speed: 0, points: 0, avoidable: true },
+            barricade: { width: 60, height: 20, color: '#e67e22', speed: 0, points: 0, avoidable: true },
+            pothole: { width: 30, height: 15, color: '#2c3e50', speed: 0, points: 0, avoidable: true, ground: true },
+            cow: { width: 50, height: 40, color: '#f5f5dc', speed: 0.1, points: 0, avoidable: true }
+        };
+        
+        // Lane positions
+        const lanes = [80, 160, 240, 320];
+        
+        // Initialize road segments
+        function initRoad() {
+            roadSegments = [];
+            for (let y = -100; y < canvas.height + 100; y += 50) {
+                roadSegments.push(createRoadSegment(y));
+            }
+        }
+        
+        function createRoadSegment(y) {
+            return {
+                y: y,
+                curve: Math.sin(y * 0.005) * 20,
+                width: 320 + Math.sin(y * 0.003) * 40,
+                buildings: Math.random() > 0.7
+            };
+        }
+        
+        // Spawn obstacle
+        function spawnObstacle() {
+            const types = Object.keys(obstacleTypes);
+            const weights = [3, 2, 1, 2, 1, 1, 2, 0.5]; // Relative spawn chances
+            
+            // Increase variety based on difficulty
+            let totalWeight = weights.reduce((a, b) => a + b, 0);
+            let random = Math.random() * totalWeight;
+            let typeIndex = 0;
+            
+            for (let i = 0; i < weights.length; i++) {
+                random -= weights[i];
+                if (random <= 0) {
+                    typeIndex = i;
+                    break;
+                }
+            }
+            
+            const type = types[typeIndex];
+            const config = obstacleTypes[type];
+            const lane = lanes[Math.floor(Math.random() * lanes.length)];
+            
+            obstacles.push({
+                x: lane,
+                y: -config.height,
+                width: config.width,
+                height: config.height,
+                type: type,
+                color: config.color,
+                speedMod: config.speed,
+                erratic: config.erratic || false,
+                ground: config.ground || false,
+                erraticTimer: 0,
+                erraticDir: 1
+            });
+        }
+        
+        // Spawn collectible
+        function spawnCollectible() {
+            const lane = lanes[Math.floor(Math.random() * lanes.length)];
+            const type = Math.random() > 0.6 ? 'chai' : 'coin';
+            
+            collectibles.push({
+                x: lane,
+                y: -30,
+                type: type,
+                size: 25,
+                bobOffset: Math.random() * Math.PI * 2
+            });
+        }
+        
+        // Update game
+        function update() {
+            if (!game.running) return;
+            
+            // Update speed based on distance
+            game.speed = Math.min(game.maxSpeed, game.baseSpeed + game.distance * 0.002);
+            game.difficultyMultiplier = 1 + game.distance * 0.001;
+            
+            // Update distance
+            game.distance += game.speed * 0.1;
+            
+            // Update weather
+            game.weatherTimer++;
+            if (game.weatherTimer > 1800 + Math.random() * 1800) {
+                game.weatherTimer = 0;
+                game.weather = Math.random() > 0.6 ? 'rain' : 'clear';
+            }
+            
+            // Update time of day
+            game.dayTimer++;
+            if (game.dayTimer > 3600) {
+                game.dayTimer = 0;
+                game.timeOfDay = game.timeOfDay === 'day' ? 'evening' : 
+                                 game.timeOfDay === 'evening' ? 'night' : 'day';
+            }
+            
+            // Rain effects
+            if (game.weather === 'rain') {
+                for (let i = 0; i < 5; i++) {
+                    raindrops.push({
+                        x: Math.random() * canvas.width,
+                        y: -10,
+                        speed: 15 + Math.random() * 10,
+                        length: 10 + Math.random() * 15
+                    });
+                }
+                // Rain makes road slippery
+                player.speed = 4;
+            } else {
+                player.speed = 5;
+            }
+            
+            // Update raindrops
+            raindrops = raindrops.filter(drop => {
+                drop.y += drop.speed;
+                return drop.y < canvas.height;
+            });
+            
+            // Update player position
+            if (keys['ArrowLeft'] || keys['KeyA']) player.targetX -= player.speed;
+            if (keys['ArrowRight'] || keys['KeyD']) player.targetX += player.speed;
+            if (keys['ArrowUp'] || keys['KeyW']) player.y = Math.max(300, player.y - 3);
+            if (keys['ArrowDown'] || keys['KeyS']) player.y = Math.min(600, player.y + 3);
+            
+            if (touchX !== null) {
+                player.targetX += (touchX - player.x) * 0.1;
+            }
+            
+            // Clamp player position
+            player.targetX = Math.max(50, Math.min(350, player.targetX));
+            player.x += (player.targetX - player.x) * 0.15;
+            
+            // Update road
+            roadOffset += game.speed;
+            if (roadOffset >= 50) {
+                roadOffset = 0;
+                roadSegments.shift();
+                roadSegments.push(createRoadSegment(roadSegments[roadSegments.length - 1].y + 50));
+            }
+            
+            roadSegments.forEach(seg => seg.y += game.speed);
+            
+            // Spawn logic
+            const spawnRate = Math.max(30, 80 - game.difficultyMultiplier * 10);
+            if (Math.random() < 1 / spawnRate) spawnObstacle();
+            if (Math.random() < 0.01) spawnCollectible();
+            
+            // Update obstacles
+            obstacles = obstacles.filter(obs => {
+                obs.y += game.speed * (1 - obs.speedMod);
+                
+                // Erratic movement for dogs
+                if (obs.erratic) {
+                    obs.erraticTimer++;
+                    if (obs.erraticTimer > 30) {
+                        obs.erraticTimer = 0;
+                        obs.erraticDir = Math.random() > 0.5 ? 1 : -1;
+                    }
+                    obs.x += obs.erraticDir * 2;
+                    obs.x = Math.max(50, Math.min(350, obs.x));
+                }
+                
+                // Horn effect - scare away movable obstacles
+                if (player.hornActive && obs.speedMod > 0) {
+                    const dx = obs.x - player.x;
+                    if (Math.abs(dx) < 100 && obs.y > player.y - 150 && obs.y < player.y) {
+                        obs.x += Math.sign(dx) * 8;
+                    }
+                }
+                
+                // Collision detection
+                if (!player.invincible && !player.shieldActive && !obs.ground) {
+                    if (checkCollision(player, obs)) {
+                        game.health -= 100;
+                        player.invincible = true;
+                        player.invincibleTimer = 60;
+                        createExplosion(player.x, player.y);
+                        
+                        if (game.health <= 0) {
+                            gameOver();
+                        }
+                    }
+                }
+                
+                // Pothole damage
+                if (obs.ground && checkCollision(player, obs)) {
+                    if (!player.invincible && !player.shieldActive) {
+                        game.health -= 20;
+                        player.invincible = true;
+                        player.invincibleTimer = 30;
+                    }
+                }
+                
+                return obs.y < canvas.height + 100;
+            });
+            
+            // Update collectibles
+            collectibles = collectibles.filter(col => {
+                col.y += game.speed;
+                col.bobOffset += 0.1;
+                
+                if (checkCollision(player, { x: col.x, y: col.y, width: col.size, height: col.size })) {
+                    if (col.type === 'chai') {
+                        game.chai++;
+                        game.health = Math.min(100, game.health + 20);
+                        createParticles(col.x, col.y, '#8B4513', 10);
+                    } else {
+                        game.coins++;
+                        createParticles(col.x, col.y, '#ffd700', 10);
+                    }
+                    return false;
+                }
+                
+                return col.y < canvas.height + 50;
+            });
+            
+            // Update particles
+            particles = particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life--;
+                return p.life > 0;
+            });
+            
+            // Update player states
+            if (player.invincible) {
+                player.invincibleTimer--;
+                if (player.invincibleTimer <= 0) player.invincible = false;
+            }
+            
+            if (player.boosting) {
+                player.boostTimer--;
+                game.speed = game.baseSpeed + game.distance * 0.002 + 5;
+                if (player.boostTimer <= 0) player.boosting = false;
+            }
+            
+            if (player.hornActive) {
+                player.hornTimer--;
+                if (player.hornTimer <= 0) player.hornActive = false;
+            }
+            
+            if (player.shieldActive) {
+                player.shieldTimer--;
+                if (player.shieldTimer <= 0) player.shieldActive = false;
+            }
+            
+            // Update ability cooldowns
+            Object.keys(abilities).forEach(key => {
+                if (abilities[key].cooldown > 0) abilities[key].cooldown--;
+            });
+            
+            // Unlock abilities
+            if (game.distance >= abilities.horn.unlockDistance) abilities.horn.unlocked = true;
+            if (game.distance >= abilities.boost.unlockDistance) abilities.boost.unlocked = true;
+            if (game.distance >= abilities.shield.unlockDistance) abilities.shield.unlocked = true;
+            
+            // Update UI
+            updateUI();
+        }
+        
+        // Check collision
+        function checkCollision(a, b) {
+            return a.x - a.width/2 < b.x + b.width/2 &&
+                   a.x + a.width/2 > b.x - b.width/2 &&
+                   a.y - a.height/2 < b.y + b.height/2 &&
+                   a.y + a.height/2 > b.y - b.height/2;
+        }
+        
+        // Create particles
+        function createParticles(x, y, color, count) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8,
+                    color: color,
+                    life: 30 + Math.random() * 20
+                });
+            }
+        }
+        
+        // Create explosion effect
+        function createExplosion(x, y) {
+            createParticles(x, y, '#ff6b6b', 20);
+            createParticles(x, y, '#ffd700', 10);
+        }
+        
+        // Draw game
+        function draw() {
+            // Sky gradient based on time of day
+            let skyColors;
+            if (game.timeOfDay === 'day') {
+                skyColors = ['#87CEEB', '#E0F6FF'];
+            } else if (game.timeOfDay === 'evening') {
+                skyColors = ['#FF7F50', '#FFD700'];
+            } else {
+                skyColors = ['#1a1a2e', '#16213e'];
+            }
+            
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGrad.addColorStop(0, skyColors[0]);
+            skyGrad.addColorStop(1, skyColors[1]);
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw road
+            ctx.fillStyle = '#333';
+            ctx.fillRect(40, 0, 320, canvas.height);
+            
+            // Road markings
+            ctx.strokeStyle = '#fff';
+            ctx.setLineDash([30, 20]);
+            ctx.lineWidth = 3;
+            
+            for (let i = 1; i < 4; i++) {
+                ctx.beginPath();
+                ctx.moveTo(40 + i * 80, 0);
+                ctx.lineTo(40 + i * 80, canvas.height);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+            
+            // Road edges
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 5;
+            ctx.beginPath();
+            ctx.moveTo(40, 0);
+            ctx.lineTo(40, canvas.height);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(360, 0);
+            ctx.lineTo(360, canvas.height);
+            ctx.stroke();
+            
+            // Draw buildings on sides
+            drawBuildings();
+            
+            // Draw obstacles
+            obstacles.forEach(obs => {
+                drawObstacle(obs);
+            });
+            
+            // Draw collectibles
+            collectibles.forEach(col => {
+                const bobY = Math.sin(col.bobOffset) * 3;
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(col.type === 'chai' ? '☕' : '🪙', col.x, col.y + bobY);
+            });
+            
+            // Draw player rickshaw
+            drawRickshaw(player.x, player.y);
+            
+            // Draw shield effect
+            if (player.shieldActive) {
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, 50, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(100, 200, 255, ${0.5 + Math.sin(Date.now() * 0.01) * 0.3})`;
+                ctx.lineWidth = 4;
+                ctx.stroke();
+            }
+            
+            // Draw particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 50;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+            
+            // Draw rain
+            if (game.weather === 'rain') {
+                ctx.strokeStyle = 'rgba(150, 200, 255, 0.6)';
+                ctx.lineWidth = 1;
+                raindrops.forEach(drop => {
+                    ctx.beginPath();
+                    ctx.moveTo(drop.x, drop.y);
+                    ctx.lineTo(drop.x - 2, drop.y + drop.length);
+                    ctx.stroke();
+                });
+                
+                // Rain overlay
+                ctx.fillStyle = 'rgba(100, 150, 200, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            
+            // Health bar
+            ctx.fillStyle = '#333';
+            ctx.fillRect(canvas.width/2 - 75, 45, 150, 12);
+            ctx.fillStyle = game.health > 30 ? '#2ecc71' : '#e74c3c';
+            ctx.fillRect(canvas.width/2 - 75, 45, 150 * (game.health/100), 12);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(canvas.width/2 - 75, 45, 150, 12);
+        }
+        
+        // Draw rickshaw
+        function drawRickshaw(x, y) {
+            if (player.invincible && Math.floor(Date.now() / 50) % 2 === 0) return;
+            
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // Body
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(-20, 10, 40, 25);
+            
+            // Cabin
+            ctx.fillStyle = '#f1c40f';
+            ctx.beginPath();
+            ctx.moveTo(-22, 10);
+            ctx.lineTo(-22, -25);
+            ctx.lineTo(22, -25);
+            ctx.lineTo(22, 10);
+            ctx.closePath();
+            ctx.fill();
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Roof
+            ctx.fillStyle = '#2c3e50';
+            ctx.beginPath();
+            ctx.moveTo(-25, -25);
+            ctx.lineTo(0, -40);
+            ctx.lineTo(25, -25);
+            ctx.closePath();
+            ctx.fill();
+            
+            // Windshield
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+            ctx.fillRect(-15, -20, 30, 15);
+            
+            // Wheels
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(-18, 30, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(18, 30, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Front wheel
+            ctx.beginPath();
+            ctx.arc(0, -35, 6, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Headlight
+            if (game.timeOfDay === 'night') {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(0, -35, 4, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Light beam
+                ctx.fillStyle = 'rgba(255, 255, 200, 0.2)';
+                ctx.beginPath();
+                ctx.moveTo(-10, -40);
+                ctx.lineTo(10, -40);
+                ctx.lineTo(30, -100);
+                ctx.lineTo(-30, -100);
+                ctx.closePath();
+                ctx.fill();
+            }
+            
+            // Boost effect
+            if (player.boosting) {
+                ctx.fillStyle = '#ff6b6b';
+                for (let i = 0; i < 3; i++) {
+                    ctx.beginPath();
+                    ctx.arc(-10 + i * 10, 40 + Math.random() * 10, 5 + Math.random() * 5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            ctx.restore();
+        }
+        
+        // Draw obstacle
+        function drawObstacle(obs) {
+            ctx.save();
+            ctx.translate(obs.x, obs.y);
+            
+            switch(obs.type) {
+                case 'car':
+                case 'taxi':
+                    // Car body
+                    ctx.fillStyle = obs.color;
+                    ctx.fillRect(-obs.width/2, -obs.height/2, obs.width, obs.height);
+                    // Windows
+                    ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+                    ctx.fillRect(-obs.width/2 + 5, -obs.height/2 + 10, obs.width - 10, 15);
+                    // Wheels
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.fillRect(-obs.width/2 - 3, -obs.height/2 + 5, 6, 12);
+                    ctx.fillRect(obs.width/2 - 3, -obs.height/2 + 5, 6, 12);
+                    ctx.fillRect(-obs.width/2 - 3, obs.height/2 - 17, 6, 12);
+                    ctx.fillRect(obs.width/2 - 3, obs.height/2 - 17, 6, 12);
+                    break;
+                    
+                case 'bus':
+                    ctx.fillStyle = obs.color;
+                    ctx.fillRect(-obs.width/2, -obs.height/2, obs.width, obs.height);
+                    // Windows
+                    ctx.fillStyle = 'rgba(100, 200, 255, 0.6)';
+                    for (let i = 0; i < 4; i++) {
+                        ctx.fillRect(-obs.width/2 + 5, -obs.height/2 + 10 + i * 22, obs.width - 10, 15);
+                    }
+                    break;
+                    
+                case 'dog':
+                    ctx.fillStyle = obs.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, obs.width/2, obs.height/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Head
+                    ctx.beginPath();
+                    ctx.arc(obs.width/3, 0, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Legs
+                    ctx.fillRect(-obs.width/3, obs.height/3, 5, 10);
+                    ctx.fillRect(obs.width/4, obs.height/3, 5, 10);
+                    break;
+                    
+                case 'vendor':
+                    // Cart
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(-obs.width/2, -obs.height/4, obs.width, obs.height/2);
+                    // Umbrella
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    ctx.arc(0, -obs.height/2, obs.width/2, Math.PI, 0);
+                    ctx.fill();
+                    // Wheels
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath();
+                    ctx.arc(-obs.width/3, obs.height/3, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(obs.width/3, obs.height/3, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                    
+                case 'barricade':
+                    ctx.fillStyle = obs.color;
+                    ctx.fillRect(-obs.width/2, -obs.height/2, obs.width, obs.height);
+                    // Stripes
+                    ctx.fillStyle = '#fff';
+                    for (let i = 0; i < 4; i++) {
+                        ctx.fillRect(-obs.width/2 + i * 20, -obs.height/2, 10, obs.height);
+                    }
+                    break;
+                    
+                case 'pothole':
+                    ctx.fillStyle = obs.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, obs.width/2, obs.height/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#1a1a1a';
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, obs.width/3, obs.height/3, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    break;
+                    
+                case 'cow':
+                    ctx.fillStyle = obs.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, obs.width/2, obs.height/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Head
+                    ctx.beginPath();
+                    ctx.arc(obs.width/3, -5, 12, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Spots
+                    ctx.fillStyle = '#8B4513';
+                    ctx.beginPath();
+                    ctx.arc(-5, -5, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(5, 8, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Legs
+                    ctx.fillStyle = obs.color;
+                    ctx.fillRect(-obs.width/3, obs.height/3, 8, 15);
+                    ctx.fillRect(obs.width/4, obs.height/3, 8, 15);
+                    break;
+            }
+            
+            ctx.restore();
+        }
+        
+        // Draw buildings
+        function drawBuildings() {
+            const colors = ['#4a4a4a', '#5a5a5a', '#3a3a3a', '#6a6a6a'];
+            
+            // Left side
+            for (let y = 0; y < canvas.height; y += 80) {
+                ctx.fillStyle = colors[Math.floor(y/80) % colors.length];
+                ctx.fillRect(0, y, 35, 75);
+                
+                // Windows
+                ctx.fillStyle = game.timeOfDay === 'night' ? 
+                    (Math.random() > 0.3 ? '#ffd700' : '#333') : 'rgba(100, 200, 255, 0.5)';
+                for (let wy = y + 10; wy < y + 70; wy += 20) {
+                    for (let wx = 5; wx < 30; wx += 12) {
+                        ctx.fillRect(wx, wy, 8, 12);
+                    }
+                }
+            }
+            
+            // Right side
+            for (let y = 0; y < canvas.height; y += 80) {
+                ctx.fillStyle = colors[(Math.floor(y/80) + 2) % colors.length];
+                ctx.fillRect(365, y, 35, 75);
+                
+                ctx.fillStyle = game.timeOfDay === 'night' ? 
+                    (Math.random() > 0.3 ? '#ffd700' : '#333') : 'rgba(100, 200, 255, 0.5)';
+                for (let wy = y + 10; wy < y + 70; wy += 20) {
+                    for (let wx = 370; wx < 395; wx += 12) {
+                        ctx.fillRect(wx, wy, 8, 12);
+                    }
+                }
+            }
+        }
+        
+        // Update UI
+        function updateUI() {
+            document.getElementById('distance').textContent = Math.floor(game.distance);
+            document.getElementById('chai').textContent = game.chai;
+            document.getElementById('coins').textContent = game.coins;
+            
+            // Update ability buttons
+            const hornBtn = document.getElementById('hornAbility');
+            const boostBtn = document.getElementById('boostAbility');
+            const shieldBtn = document.getElementById('shieldAbility');
+            
+            hornBtn.classList.toggle('unlocked', abilities.horn.unlocked);
+            boostBtn.classList.toggle('unlocked', abilities.boost.unlocked);
+            shieldBtn.classList.toggle('unlocked', abilities.shield.unlocked);
+            
+            hornBtn.classList.toggle('active', player.hornActive);
+            boostBtn.classList.toggle('active', player.boosting);
+            shieldBtn.classList.toggle('active', player.shieldActive);
+        }
+        
+        // Game over
+        function gameOver() {
+            game.running = false;
+            document.getElementById('finalDistance').textContent = Math.floor(game.distance);
+            document.getElementById('finalCoins').textContent = game.coins;
+            document.getElementById('finalChai').textContent = game.chai;
+            document.getElementById('gameOverScreen').style.display = 'flex';
+        }
+        
+        // Start game
+        function startGame() {
+            game = {
+                running: true,
+                speed: 3,
+                baseSpeed: 3,
+                maxSpeed: 12,
+                distance: 0,
+                coins: 0,
+                chai: 0,
+                health: 100,
+                difficultyMultiplier: 1,
+                weather: 'clear',
+                weatherTimer: 0,
+                timeOfDay: 'day',
+                dayTimer: 0
+            };
+            
+            player = {
+                x: 200,
+                y: 550,
+                width: 45,
+                height: 70,
+                targetX: 200,
+                speed: 5,
+                invincible: false,
+                invincibleTimer: 0,
+                boosting: false,
+                boostTimer: 0,
+                hornActive: false,
+                hornTimer: 0,
+                shieldActive: false,
+                shieldTimer: 0
+            };
+            
+            abilities = {
+                horn: { unlocked: false, unlockDistance: 100, cooldown: 0, maxCooldown: 300 },
+                boost: { unlocked: false, unlockDistance: 300, cooldown: 0, maxCooldown: 500 },
+                shield: { unlocked: false, unlockDistance: 600, cooldown: 0, maxCooldown: 800 }
+            };
+            
+            obstacles = [];
+            collectibles = [];
+            particles = [];
+            raindrops = [];
+            
+            initRoad();
+            
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('gameOverScreen').style.display = 'none';
+        }
+        
+        // Use ability
+        function useAbility(type) {
+            if (!abilities[type].unlocked || abilities[type].cooldown > 0) return;
+            
+            switch(type) {
+                case 'horn':
+                    player.hornActive = true;
+                    player.hornTimer = 60;
+                    abilities.horn.cooldown = abilities.horn.maxCooldown;
+                    break;
+                case 'boost':
+                    player.boosting = true;
+                    player.boostTimer = 120;
+                    abilities.boost.cooldown = abilities.boost.maxCooldown;
+                    break;
+                case 'shield':
+                    player.shieldActive = true;
+                    player.shieldTimer = 180;
+                    abilities.shield.cooldown = abilities.shield.maxCooldown;
+                    break;
+            }
+        }
+        
+        // Game loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Event listeners
+        document.addEventListener('keydown', e => {
+            keys[e.code] = true;
+            
+            if (e.code === 'Digit1') useAbility('horn');
+            if (e.code === 'Digit2') useAbility('boost');
+            if (e.code === 'Digit3') useAbility('shield');
+        });
+        
+        document.addEventListener('keyup', e => {
+            keys[e.code] = false;
+        });
+        
+        // Touch controls
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+        });
+        
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+        });
+        
+        canvas.addEventListener('touchend', () => {
+            touchX = null;
+        });
+        
+        // Mouse controls (for testing on desktop)
+        canvas.addEventListener('mousedown', e => {
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.clientX - rect.left;
+        });
+        
+        canvas.addEventListener('mousemove', e => {
+            if (touchX !== null) {
+                const rect = canvas.getBoundingClientRect();
+                touchX = e.clientX - rect.left;
+            }
+        });
+        
+        canvas.addEventListener('mouseup', () => {
+            touchX = null;
+        });
+        
+        // Button listeners
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+        
+        document.getElementById('hornAbility').addEventListener('click', () => useAbility('horn'));
+        document.getElementById('boostAbility').addEventListener('click', () => useAbility('boost'));
+        document.getElementById('shieldAbility').addEventListener('click', () => useAbility('shield'));
+        
+        // Start the game loop
+        gameLoop();
+    </script>
+</body>
+</html>
